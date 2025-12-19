@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+
+# terminal constants
+COLS=$(tput cols)
+LINES=$(tput lines)
+ESC=$'\x1b'
+
+# frames
+MENU_FRAME='
+<l> _________/\    <i>
+<l> |\/|____/  \   <i>
+<l> |/\|   /    \  <i>
+<l> |\/|___|    |  <i>
+<l> |/\|___|    |  <i>
+<l> |\/|   |    |  <i>
+<l> |\/|   |    |  <i>
+<l> |/\|   |    |  <i>
+<l> |\/|  /      \ <i>
+<l> |/\|  | ____ | <i>
+<l> |\/|   /\  /\  <i>
+<b1>
+<b2>
+'
+
+CARRIERS=('
+<l> _________/\
+<l> |\/|____/  \
+<l> |/\|   /    \
+<l> |\/|___|    |
+<l> |/\|___|    |
+<l> |\/|   |    |
+<l> |\/|   |    |
+<l> |/\|   |    |
+<l> |\/|  /      \
+<l> |/\|  | ____ |
+<l> |\/|   /\  /\
+'
+
+'
+
+
+<l>       /\
+<l>      |  |
+<l>     /    \
+<l>    | O  O |
+<l>    |      |
+<l>    ========
+<l>    /\/\/\/\
+<l> _____________
+<l> ||         ||
+'
+
+'
+<l>       |
+<l>     |||||
+<l>      |||
+<l>      |||
+<l>     || ||
+<l>     |   |
+<l>    /     \
+<l>    ========
+<l>    /\/\/\/\
+<l> _____________
+<l> ||         ||
+'
+)
+
+
+START_BUTTON='< Start Game >'
+SELECT_BUTTON='< Select Carrier >'
+
+# rendering variables
+ACTIVE_BUTTON=0
+ACTIVE_CARRIER=0
+UPDATE_MENU=1
+UPDATE_BUTTONS=1
+UPDATE_CARRIER=1
+
+# helpers
+repeat() {
+    local times=$1
+    local text=$2
+    for _ in $(seq "$times"); do echo -n "$text"; done
+}
+
+fatal() {
+	printf "[error]" "$@" >&2
+	exit 1
+}
+
+cleanup() {
+    printf "${ESC}[?1049l"
+    printf "${ESC}[?25h"
+}
+
+active_button() {
+    case "$((ACTIVE_BUTTON % 2))" in
+        0) echo -n 'start';;
+        1 | -1) echo -n 'select';;
+    esac
+}
+
+active_carrier() {
+    local length=${#CARRIERS[@]}
+    local index=$(( ACTIVE_CARRIER % length ))
+    echo "${CARRIERS[$index]}"
+}
+
+# drawing
+render_buttons() {
+    local start_line=$1
+    local indent=$2
+
+    local start_button_line=$((start_line + 4))
+    local start_button_col=$((indent + 2))
+
+    local select_button_line=$((start_line + 7))
+    local select_button_col=$((indent))
+
+    local start_esc=
+    local select_esc=
+    if [[ $(active_button) == 'start' ]]; then
+        start_esc="${ESC}[48;5;255m${ESC}[38;5;243m${ESC}[1m"
+    else
+        select_esc="${ESC}[48;5;255m${ESC}[38;5;243m${ESC}[1m"
+    fi
+
+    tput cup "$start_button_line" "$start_button_col"
+    printf "%s%s${ESC}[0m" "$start_esc" "$START_BUTTON"
+
+    tput cup "$select_button_line" "$select_button_col"
+    printf "%s%s${ESC}[0m" "$select_esc" "$SELECT_BUTTON"
+}
+
+render_carriers() {
+   local start_line=$1
+   local start_indent=$2
+
+   for i in {0..11}; do
+       tput cup "$((start_line + i))" 0
+       printf "$(repeat $((start_indent + 17)) ' ')"
+   done
+
+   tput cup "$start_line" 0
+   f=$(active_carrier)
+   f=${f//<l>/$(repeat $start_indent ' ')}
+   printf "$f"
+}
+
+render_menu() {
+    local start_line=$((LINES / 3))
+    local left_indent=$((COLS / 4))
+    local internal_indent=$((COLS / 8))
+    if [[ -n $UPDATE_MENU ]]; then
+        clear
+        printf "${ESC}[%dE" "$start_line"
+        local f=$MENU_FRAME
+        f=${f//<b1>/$(repeat $COLS '_')}
+        f=${f//<b2>/$(repeat $COLS '/')}
+        f=${f//<l>/$(repeat $left_indent ' ')}
+        f=${f//<i>/$(repeat $internal_indent ' ')}
+
+        printf "$f"
+        UPDATE_MENU=
+    fi
+
+    if [[ -n $UPDATE_BUTTONS ]]; then
+        render_buttons $start_line $((left_indent + internal_indent + 17))
+        UPDATE_BUTTONS=
+    fi
+
+    if [[ -n $UPDATE_CARRIER ]]; then
+        render_carriers $start_line $left_indent
+        UPDATE_CARRIER=
+    fi
+}
+
+
+main() {
+	# ensure we are called interactively
+	if [[ ! -t 1 ]]; then
+		fatal 'stdout must be a terminal. Run game in interactive mode'
+	fi
+
+    # configure terminal for drawing
+    trap cleanup exit
+    printf "${ESC}[?1049h"
+    printf "${ESC}[?25l"
+
+    # render start frame
+    render_menu
+
+    local escape_char=$'\u1b'
+	while true; do
+        local cols=$(tput cols)
+        if (( cols != COLS )); then
+            UPDATE_MENU=1
+            COLS=$cols
+        fi
+
+        local lines=$(tput lines)
+        if (( lines != LINES )); then
+            UPDATE_MENU=1
+            LINES=$lines
+        fi
+
+		local data=
+		read -rsn1 data 2>/dev/null
+		if [[ $data == "$escape_char" ]]; then
+			read -rsn2 data 2>/dev/null
+		fi
+
+		case "$data" in
+            # key up
+			'[A' | k | w)
+                ((ACTIVE_BUTTON++))
+                UPDATE_BUTTONS=1
+                ;;
+            # key down
+			'[B' | j | s)
+                ((ACTIVE_BUTTON--))
+                UPDATE_BUTTONS=1
+                ;;
+
+            # key left
+            '[D' | h | a)
+                if [[ "$(active_button)" == 'select' ]]; then
+                    ((ACTIVE_CARRIER++))
+                    UPDATE_CARRIER=1
+                fi
+                ;;
+
+            # key right
+            '[C' | l | d)
+                if [[ "$(active_button)" == 'select' ]]; then
+                    ((ACTIVE_CARRIER--))
+                    UPDATE_CARRIER=1
+                fi
+                ;;
+
+            # key enter
+			'')
+                continue;; # for now skip
+
+            # ignore everything else
+            *) continue;;
+		esac
+
+        render_menu
+	done
+}
+
+main
