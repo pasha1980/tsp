@@ -84,8 +84,8 @@ repeat() {
 }
 
 fatal() {
-	printf "[error]" "$@" >&2
-	exit 1
+    printf "[error]" "$@" >&2
+    exit 1
 }
 
 cleanup() {
@@ -177,10 +177,10 @@ render_menu() {
 
 
 main() {
-	# ensure we are called interactively
-	if [[ ! -t 1 ]]; then
-		fatal 'stdout must be a terminal. Run game in interactive mode'
-	fi
+    # ensure we are called interactively
+    if [[ ! -t 1 ]]; then
+        fatal 'stdout must be a terminal. Run game in interactive mode'
+    fi
 
     # configure terminal for drawing
     trap cleanup exit
@@ -191,7 +191,7 @@ main() {
     render_menu
 
     local escape_char=$'\u1b'
-	while true; do
+    while true; do
         local cols=$(tput cols)
         if (( cols != COLS )); then
             UPDATE_MENU=1
@@ -204,20 +204,20 @@ main() {
             LINES=$lines
         fi
 
-		local data=
-		read -rsn1 data 2>/dev/null
-		if [[ $data == "$escape_char" ]]; then
-			read -rsn2 data 2>/dev/null
-		fi
+        local data=
+        read -rsn1 data < /dev/tty 2>/dev/null
+        if [[ $data == "$escape_char" ]]; then
+            read -rsn2 data < /dev/tty 2>/dev/null
+        fi
 
-		case "$data" in
+        case "$data" in
             # key up
-			'[A' | k | w)
+            '[A' | k | w)
                 ((ACTIVE_BUTTON++))
                 UPDATE_BUTTONS=1
                 ;;
             # key down
-			'[B' | j | s)
+            '[B' | j | s)
                 ((ACTIVE_BUTTON--))
                 UPDATE_BUTTONS=1
                 ;;
@@ -239,15 +239,15 @@ main() {
                 ;;
 
             # key enter
-			'')
+            '')
                 continue;; # for now skip
 
             # ignore everything else
             *) continue;;
-		esac
+        esac
 
         render_menu
-	done
+    done
 }
 
 main
