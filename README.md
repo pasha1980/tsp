@@ -1,7 +1,8 @@
+``` asciidoc
 ░▀█▀░▀█▀░█░█░░░█▀▀░█▀█░█▀█░█▀▀░█▀▀░░░█▀█░█▀▄░█▀█░█▀▀░█▀▄░█▀█░█▄█░░
 ░░█░░░█░░░█░░░░▀▀█░█▀▀░█▀█░█░░░█▀▀░░░█▀▀░█▀▄░█░█░█░█░█▀▄░█▀█░█░█░░
 ░░▀░░░▀░░░▀░░░░▀▀▀░▀░░░▀░▀░▀▀▀░▀▀▀░░░▀░░░▀░▀░▀▀▀░▀▀▀░▀░▀░▀░▀░▀░▀░░
-
+```
 
 The game I'm developing just for fun. It will never be something serious and interesting, but if you are interested - you are welcome to try it.
 
