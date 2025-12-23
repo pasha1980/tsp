@@ -6,7 +6,17 @@ LINES=$(tput lines)
 ESC=$'\x1b'
 
 # frames
-MENU_FRAME='
+LOGO="
+<l>
+<l>  _____ _______   __  ___                     ___
+<l> |_   _|_   _\ \ / / / __|_ __  __ _ __ ___  | _ \_ _ ___  __ _ _ _ __ _ _ __
+<l>   | |   | |  \ V /  \__ \ \'_ \/ _\` / _/ -_) |  _/ \'_/ _ \/ _\` | \'_/ _\` | \'  \\
+<l>   |_|   |_|   |_|   |___/ .__/\__,_\__\___| |_| |_| \___/\__, |_| \__,_|_|_|_|
+<l>                         |_|                              |___/
+<l>
+"
+
+MENU_FRAME="
 <l> _________/\    <i>
 <l> |\/|____/  \   <i>
 <l> |/\|   /    \  <i>
@@ -20,7 +30,7 @@ MENU_FRAME='
 <l> |\/|   /\  /\  <i>
 <b1>
 <b2>
-'
+"
 
 CARRIERS=('
 <l> _________/\
@@ -70,11 +80,12 @@ START_BUTTON='< Start Game >'
 SELECT_BUTTON='< Select Carrier >'
 
 # rendering variables
+MODE=0
 ACTIVE_BUTTON=0
 ACTIVE_CARRIER=0
 UPDATE_MENU=1
 UPDATE_BUTTONS=1
-UPDATE_CARRIER=1
+UPDATE_CARRIER=
 
 # helpers
 repeat() {
@@ -91,6 +102,13 @@ fatal() {
 cleanup() {
     printf "${ESC}[?1049l"
     printf "${ESC}[?25h"
+}
+
+active_mode() {
+    case "$((MODE % 2))" in
+        0) echo -n 'menu';;
+        1 | -1) echo -n 'gameplay';;
+    esac
 }
 
 active_button() {
@@ -148,12 +166,18 @@ render_carriers() {
 }
 
 render_menu() {
-    local start_line=$((LINES / 3))
+    local logo_line=$((LINES / 4))
+    local start_line=$((LINES / 2))
     local left_indent=$((COLS / 4))
     local internal_indent=$((COLS / 8))
     if [[ -n $UPDATE_MENU ]]; then
         clear
-        printf "${ESC}[%dE" "$start_line"
+        tput cup "$logo_line" 0
+        local l=$LOGO
+        l=${l//<l>/$(repeat $left_indent ' ')}
+        printf "$l"
+
+        tput cup "$start_line" 0
         local f=$MENU_FRAME
         f=${f//<b1>/$(repeat $COLS '_')}
         f=${f//<b2>/$(repeat $COLS '/')}
@@ -173,6 +197,8 @@ render_menu() {
         render_carriers $start_line $left_indent
         UPDATE_CARRIER=
     fi
+
+    tput cup 0 0
 }
 
 
@@ -187,11 +213,10 @@ main() {
     printf "${ESC}[?1049h"
     printf "${ESC}[?25l"
 
-    # render start frame
-    render_menu
-
     local escape_char=$'\u1b'
     while true; do
+        render_menu
+
         local cols=$(tput cols)
         if (( cols != COLS )); then
             UPDATE_MENU=1
@@ -204,13 +229,13 @@ main() {
             LINES=$lines
         fi
 
-        local data=
-        read -rsn1 data < /dev/tty 2>/dev/null
-        if [[ $data == "$escape_char" ]]; then
-            read -rsn2 data < /dev/tty 2>/dev/null
+        local input=
+        read -rsn1 input < /dev/tty 2>/dev/null
+        if [[ $input == "$escape_char" ]]; then
+            read -rsn2 input < /dev/tty 2>/dev/null
         fi
 
-        case "$data" in
+        case "$input" in
             # key up
             '[A' | k | w)
                 ((ACTIVE_BUTTON++))
@@ -246,7 +271,6 @@ main() {
             *) continue;;
         esac
 
-        render_menu
     done
 }
 
