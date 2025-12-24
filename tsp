@@ -16,34 +16,34 @@ LOGO="
 <l>
 "
 
-MENU_FRAME="
-<l> _________/\    <i>
-<l> |\/|____/  \   <i>
-<l> |/\|   /    \  <i>
-<l> |\/|___|    |  <i>
-<l> |/\|___|    |  <i>
-<l> |\/|   |    |  <i>
-<l> |\/|   |    |  <i>
-<l> |/\|   |    |  <i>
-<l> |\/|  /      \ <i>
-<l> |/\|  | ____ | <i>
-<l> |\/|   /\  /\  <i>
+CARRIER_BLOCK="
+<l> _________▐▌
+<l> |\/|____████
+<l> |/\|   ▐████▌
+<l> |\/|___██████
+<l> |/\|   ██████
+<l> |\/|   ██████
+<l> |\/|   ██████
+<l> |/\|   ██████
+<l> |\/|  ▐██████▌
+<l> |/\|  ████████
+<l> |\/|   /\  /\\
 <b1>
 <b2>
 "
 
 CARRIERS=('
-<l> _________/\
-<l> |\/|____/  \
-<l> |/\|   /    \
-<l> |\/|___|    |
-<l> |/\|___|    |
-<l> |\/|   |    |
-<l> |\/|   |    |
-<l> |/\|   |    |
-<l> |\/|  /      \
-<l> |/\|  | ____ |
-<l> |\/|   /\  /\
+<l> _________▐▌
+<l> |\/|____████
+<l> |/\|   ▐████▌
+<l> |\/|___██████
+<l> |/\|   ██████
+<l> |\/|   ██████
+<l> |\/|   ██████
+<l> |/\|   ██████
+<l> |\/|  ▐██████▌
+<l> |/\|  ████████
+<l> |\/|   /\  /\\
 '
 
 '
@@ -104,6 +104,11 @@ cleanup() {
     printf "${ESC}[?25h"
 }
 
+calc_d() {
+    local expr=${1:-0}
+    awk "BEGIN {printf \"%d\n\", $expr }"
+}
+
 active_mode() {
     case "$((MODE % 2))" in
         0) echo -n 'menu';;
@@ -120,7 +125,7 @@ active_button() {
 
 active_carrier() {
     local length=${#CARRIERS[@]}
-    local index=$(( ACTIVE_CARRIER % length ))
+    local index=$((ACTIVE_CARRIER % length))
     echo "${CARRIERS[$index]}"
 }
 
@@ -166,35 +171,35 @@ render_carriers() {
 }
 
 render_menu() {
-    local logo_line=$((LINES / 4))
-    local start_line=$((LINES / 2))
-    local left_indent=$((COLS / 4))
-    local internal_indent=$((COLS / 8))
+    local carrier_indent=$(calc_d "$COLS / 2.3")
+    local carrier_line=$(calc_d "$LINES / 1.5")
+
     if [[ -n $UPDATE_MENU ]]; then
         clear
+        local logo_line=$((LINES / 6))
+        local logo_indent=$(calc_d "$COLS / 3.77")
         tput cup "$logo_line" 0
         local l=$LOGO
-        l=${l//<l>/$(repeat $left_indent ' ')}
+        l=${l//<l>/$(repeat $logo_indent ' ')}
         printf "$l"
 
-        tput cup "$start_line" 0
-        local f=$MENU_FRAME
+        tput cup "$carrier_line" 0
+        local f=$CARRIER_BLOCK
         f=${f//<b1>/$(repeat $COLS '_')}
         f=${f//<b2>/$(repeat $COLS '/')}
-        f=${f//<l>/$(repeat $left_indent ' ')}
-        f=${f//<i>/$(repeat $internal_indent ' ')}
+        f=${f//<l>/$(repeat $carrier_indent ' ')}
 
         printf "$f"
         UPDATE_MENU=
     fi
 
     if [[ -n $UPDATE_BUTTONS ]]; then
-        render_buttons $start_line $((left_indent + internal_indent + 17))
+        render_buttons $(calc_d "$LINES / 2.6") $(calc_d "$COLS / 2.35")
         UPDATE_BUTTONS=
     fi
 
     if [[ -n $UPDATE_CARRIER ]]; then
-        render_carriers $start_line $left_indent
+        render_carriers "$carrier_line" "$carrier_indent"
         UPDATE_CARRIER=
     fi
 
@@ -203,6 +208,7 @@ render_menu() {
 
 
 main() {
+
     # ensure we are called interactively
     if [[ ! -t 1 ]]; then
         fatal 'stdout must be a terminal. Run game in interactive mode'
@@ -241,6 +247,7 @@ main() {
                 ((ACTIVE_BUTTON++))
                 UPDATE_BUTTONS=1
                 ;;
+
             # key down
             '[B' | j | s)
                 ((ACTIVE_BUTTON--))
