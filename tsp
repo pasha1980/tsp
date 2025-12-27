@@ -4,6 +4,12 @@
 COLS=$(tput cols)
 LINES=$(tput lines)
 ESC=$'\x1b'
+SHMID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 64; echo)
+CPIPE="/tmp/$SHMID"
+
+if [[ ! -p $CPIPE ]]; then
+    mkfifo $CPIPE
+fi
 
 # frames
 LOGO="
@@ -77,13 +83,19 @@ CARRIERS=('
 START_BUTTON='< Start Game >'
 SELECT_BUTTON='< Select Carrier >'
 
-# rendering variables
+# control variables (shared)
+RENDERING_PID=
+
 MODE=0
 ACTIVE_BUTTON=0
 ACTIVE_CARRIER=0
+
 UPDATE_MENU=1
 UPDATE_BUTTONS=1
 UPDATE_CARRIER=
+
+# gameplay calculatins
+
 
 # helpers
 repeat() {
@@ -98,6 +110,10 @@ fatal() {
 }
 
 cleanup() {
+    if [[ -n $RENDERING_PID ]]; then
+        kill "$RENDERING_PID"
+    fi
+
     printf "${ESC}[?1049l"
     printf "${ESC}[?25h"
 }
@@ -108,14 +124,16 @@ calc_d() {
 }
 
 active_mode() {
-    case "$((MODE % 2))" in
+    local mode=$(get_shared | cut -d '|' -f 1)
+    case "$((mode % 2))" in
         0) echo -n 'menu';;
         1 | -1) echo -n 'gameplay';;
     esac
 }
 
 active_button() {
-    case "$((ACTIVE_BUTTON % 2))" in
+    local active_btn=$(get_shared | cut -d '|' -f 2)
+    case "$((active_btn % 2))" in
         0) echo -n 'start';;
         1 | -1) echo -n 'select';;
     esac
@@ -123,8 +141,41 @@ active_button() {
 
 active_carrier() {
     local length=${#CARRIERS[@]}
-    local index=$((ACTIVE_CARRIER % length))
+    local active_carr=$(get_shared | cut -d '|' -f 3)
+    local index=$((active_carr % length))
     echo "${CARRIERS[$index]}"
+}
+
+# shared memory
+write_shared() {
+    echo "$MODE|$ACTIVE_BUTTON|$ACTIVE_CARRIER|$COLS|$LINES" > "/dev/shm/$SHMID"
+}
+
+get_shared() {
+    local res=$(cat "/dev/shm/$SHMID" 2>/dev/null)
+    if [[ $? -eq 0 ]]; then
+        echo "$res"
+    fi
+}
+
+write_commands() {
+    echo "$UPDATE_MENU|$UPDATE_BUTTONS|$UPDATE_CARRIER" > $CPIPE &
+}
+
+read_commands() {
+    cat $CPIPE
+}
+
+# calculations
+orbit_calc() {
+    while true; do
+        if [[ "$(active_mode)" == 'gameplay' ]]; then
+            return 0
+        fi
+
+        #todo
+
+    done
 }
 
 # drawing
@@ -167,13 +218,26 @@ render_carriers() {
 }
 
 render_menu() {
-    local carrier_indent=$(calc_d "$COLS / 2.2")
-    local carrier_line=$(calc_d "$LINES / 1.5")
+    local comm=$(read_commands)
+    local u_menu=$(echo "$comm"| cut -d '|' -f 1)
+    local u_buttons=$(echo "$comm"| cut -d '|' -f 2)
+    local u_carriers=$(echo "$comm"| cut -d '|' -f 3)
 
-    if [[ -n $UPDATE_MENU ]]; then
+    local shared=$(get_shared)
+    if [[ -z $shared ]]; then
+        return 0
+    fi
+
+    local cols=$(echo "$shared" | cut -d '|' -f 4)
+    local lines=$(echo "$shared" | cut -d '|' -f 5)
+
+    local carrier_indent=$(calc_d "$cols / 2.2")
+    local carrier_line=$(calc_d "$lines / 1.5")
+
+    if [[ -n $u_menu ]]; then
         clear
-        local logo_line=$((LINES / 6))
-        local logo_indent=$(calc_d "$COLS / 3.77")
+        local logo_line=$((lines / 6))
+        local logo_indent=$(calc_d "$cols / 3.77")
         tput cup "$logo_line" 0
         local l=$LOGO
         l=${l//<l>/$(repeat $logo_indent ' ')}
@@ -181,30 +245,39 @@ render_menu() {
 
         tput cup "$carrier_line" 0
         local f=$CARRIER_BLOCK
-        f=${f//<b1>/$(repeat $COLS '_')}
-        f=${f//<b2>/$(repeat $COLS '/')}
+        f=${f//<b1>/$(repeat $cols '_')}
+        f=${f//<b2>/$(repeat $cols '/')}
         f=${f//<l>/$(repeat $carrier_indent ' ')}
 
         printf "$f"
-        UPDATE_MENU=
     fi
 
-    if [[ -n $UPDATE_BUTTONS ]]; then
-        render_buttons $(calc_d "$LINES / 2.6") $(calc_d "$COLS / 2.35")
-        UPDATE_BUTTONS=
+    if [[ -n $u_buttons ]]; then
+        render_buttons $(calc_d "$lines / 2.6") $(calc_d "$cols / 2.35")
     fi
 
-    if [[ -n $UPDATE_CARRIER ]]; then
+    if [[ -n $u_carriers ]]; then
         render_carriers "$carrier_line" "$carrier_indent"
-        UPDATE_CARRIER=
     fi
 
     tput cup 0 0
 }
 
+render_gameplay() {
+    clear
+    # todo
+}
+
+render() {
+    while true; do
+        case "$(active_mode)" in
+            menu) render_menu;;
+            gameplay) render_gameplay;;
+        esac
+    done
+}
 
 main() {
-
     # ensure we are called interactively
     if [[ ! -t 1 ]]; then
         fatal 'stdout must be a terminal. Run game in interactive mode'
@@ -216,8 +289,13 @@ main() {
     printf "${ESC}[?25l"
 
     local escape_char=$'\u1b'
+
+    write_shared
+    render &
+    write_commands
+    RENDERING_PID=$!
+
     while true; do
-        render_menu
 
         local cols=$(tput cols)
         if (( cols != COLS )); then
@@ -240,40 +318,60 @@ main() {
         case "$input" in
             # key up
             '[A' | k | w)
-                ((ACTIVE_BUTTON++))
-                UPDATE_BUTTONS=1
+                if [[ "$(active_mode)" == 'menu' ]]; then
+                    ((ACTIVE_BUTTON++))
+                    write_shared
+                    UPDATE_BUTTONS=1
+                    write_commands
+                fi
                 ;;
 
             # key down
             '[B' | j | s)
-                ((ACTIVE_BUTTON--))
-                UPDATE_BUTTONS=1
+                if [[ "$(active_mode)" == 'menu' ]]; then
+                    ((ACTIVE_BUTTON--))
+                    write_shared
+                    UPDATE_BUTTONS=1
+                    write_commands
+                fi
                 ;;
 
             # key left
             '[D' | h | a)
-                if [[ "$(active_button)" == 'select' ]]; then
+                if [[ "$(active_button)" == 'select' && "$(active_mode)" == 'menu' ]]; then
                     ((ACTIVE_CARRIER++))
+                    write_shared
                     UPDATE_CARRIER=1
+                    write_commands
                 fi
                 ;;
 
             # key right
             '[C' | l | d)
-                if [[ "$(active_button)" == 'select' ]]; then
+                if [[ "$(active_button)" == 'select' && "$(active_mode)" == 'menu' ]]; then
                     ((ACTIVE_CARRIER--))
+                    write_shared
                     UPDATE_CARRIER=1
+                    write_commands
                 fi
                 ;;
 
             # key enter
             '')
-                continue;; # for now skip
+                if [[ "$(active_button)" == 'start' && "$(active_mode)" == 'menu' ]]; then
+                    MODE=1 # start the game
+                    write_shared
+                    write_commands
+                fi
+                ;;
 
             # ignore everything else
             *) continue;;
         esac
 
+        UPDATE_MENU=
+        UPDATE_BUTTONS=
+        UPDATE_CARRIER=
     done
 }
 
