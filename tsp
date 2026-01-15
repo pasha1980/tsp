@@ -16,7 +16,7 @@ fi
 COLS=$(tput cols)
 LINES=$(tput lines)
 ESC=$'\x1b'
-SHMID=$(cat /dev/urandom | tr -dc '[:lower:]' | head -c 64; echo)
+SHMID=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | head -c 64; echo)
 CPIPE="/tmp/$SHMID"
 if [[ ! -p $CPIPE ]]; then
     mkfifo $CPIPE
