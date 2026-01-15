@@ -1,12 +1,23 @@
 #!/usr/bin/env bash
 
+# ensure we are called interactively
+if [[ ! -t 1 ]]; then
+    echo '[error] stdout must be a terminal. Run game in interactive mode'
+    exit 1
+fi
+
+# TODO: replace with ASCII seq
+if ! tput cup 0 0 2>/dev/null; then
+    echo '[error] tput is not installed. Please, install it with available package manager'
+    exit 1
+fi
+
 # terminal constants
 COLS=$(tput cols)
 LINES=$(tput lines)
 ESC=$'\x1b'
-SHMID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 64; echo)
+SHMID=$(cat /dev/urandom | tr -dc '[:lower:]' | head -c 64; echo)
 CPIPE="/tmp/$SHMID"
-
 if [[ ! -p $CPIPE ]]; then
     mkfifo $CPIPE
 fi
@@ -20,18 +31,7 @@ LOGO="
 <l>                         |_|                              |___/
 "
 
-CARRIER_BLOCK="
-<l>   ▐▌
-<l>  ████
-<l> ▐████▌
-<l> ██████
-<l> ██████
-<l> ██████
-<l> ██████
-<l> ██████
-<l>▐██████▌
-<l>████████
-<l> /\  /\\
+SUFRACE_BLOCK="
 <b1>
 <b2>
 "
@@ -92,10 +92,31 @@ ACTIVE_CARRIER=0
 
 UPDATE_MENU=1
 UPDATE_BUTTONS=1
-UPDATE_CARRIER=
+UPDATE_CARRIER=1
 
-# gameplay calculatins
-
+# gameplay calculation variables
+## total mass of the carrier
+G_M1=
+## fuel mass
+G_M2=
+## fuel mass consumption per iteration
+G_deltaM=
+## specific impulse of engine
+G_I=
+## local acceleration of gravity
+G_g=
+## the angle between the thrust vector and the gravity vector
+G_psi=
+## frontal aerodynamic drag force
+G_A=
+## engine thrust force
+G_F=
+## the angle between the thrust vector and the rocket's velocity
+G_alpha=
+## current rocket speed
+G_V=0
+## current rocket high
+G_h=0
 
 # helpers
 repeat() {
@@ -113,6 +134,8 @@ cleanup() {
     if [[ -n $RENDERING_PID ]]; then
         kill "$RENDERING_PID"
     fi
+    rm "/dev/shm/$SHMID"
+    rm "/tmp/$SHMID"
 
     printf "${ESC}[?1049l"
     printf "${ESC}[?25h"
@@ -231,8 +254,6 @@ render_menu() {
     local cols=$(echo "$shared" | cut -d '|' -f 4)
     local lines=$(echo "$shared" | cut -d '|' -f 5)
 
-    local carrier_indent=$(calc_d "$cols / 2.2")
-    local carrier_line=$(calc_d "$lines / 1.5")
 
     if [[ -n $u_menu ]]; then
         clear
@@ -243,11 +264,10 @@ render_menu() {
         l=${l//<l>/$(repeat $logo_indent ' ')}
         printf "$l"
 
-        tput cup "$carrier_line" 0
-        local f=$CARRIER_BLOCK
+        tput cup $(calc_d "$lines / 1.1") 0
+        local f=$SUFRACE_BLOCK
         f=${f//<b1>/$(repeat $cols '_')}
         f=${f//<b2>/$(repeat $cols '/')}
-        f=${f//<l>/$(repeat $carrier_indent ' ')}
 
         printf "$f"
     fi
@@ -257,6 +277,8 @@ render_menu() {
     fi
 
     if [[ -n $u_carriers ]]; then
+        local carrier_indent=$(calc_d "$cols / 2.2")
+        local carrier_line=$(calc_d "$lines / 1.5")
         render_carriers "$carrier_line" "$carrier_indent"
     fi
 
@@ -264,8 +286,26 @@ render_menu() {
 }
 
 render_gameplay() {
-    clear
-    # todo
+    local shared=$(get_shared)
+    if [[ -z $shared ]]; then
+        return 0
+    fi
+
+    local cols=$(echo "$shared" | cut -d '|' -f 4)
+    local lines=$(echo "$shared" | cut -d '|' -f 5)
+
+    # show surface if we need
+    local surface_height=$(calc_d "$lines - ($lines / 1.1)")
+    if (( (G_h + (lines / 3)) < surface_height )); then
+        tput cup "$(($lines - $surface_height))" 0
+        local f=$SUFRACE_BLOCK
+        f=${f//<b1>/$(repeat $cols '_')}
+        f=${f//<b2>/$(repeat $cols '/')}
+        printf "$f"
+    fi
+
+
+
 }
 
 render() {
@@ -278,11 +318,6 @@ render() {
 }
 
 main() {
-    # ensure we are called interactively
-    if [[ ! -t 1 ]]; then
-        fatal 'stdout must be a terminal. Run game in interactive mode'
-    fi
-
     # configure terminal for drawing
     trap cleanup exit
     printf "${ESC}[?1049h"
@@ -292,10 +327,14 @@ main() {
 
     write_shared
     render &
-    write_commands
     RENDERING_PID=$!
 
+    write_commands
+
     while true; do
+        UPDATE_MENU=
+        UPDATE_BUTTONS=
+        UPDATE_CARRIER=
 
         local cols=$(tput cols)
         if (( cols != COLS )); then
@@ -369,10 +408,7 @@ main() {
             *) continue;;
         esac
 
-        UPDATE_MENU=
-        UPDATE_BUTTONS=
-        UPDATE_CARRIER=
     done
 }
 
-main
+main "$@"
