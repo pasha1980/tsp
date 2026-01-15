@@ -17,7 +17,8 @@ COLS=$(tput cols)
 LINES=$(tput lines)
 ESC=$'\x1b'
 SHMID=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | head -c 64; echo)
-CPIPE="/tmp/$SHMID"
+SHM=$(if [[ "$(uname -s)" == 'Darwin' ]]; then echo "/tmp/$SHMID"; else echo "/dev/shm/$SHMID"; fi)
+CPIPE="/tmp/$SHMID.sock"
 if [[ ! -p $CPIPE ]]; then
     mkfifo $CPIPE
 fi
@@ -134,8 +135,8 @@ cleanup() {
     if [[ -n $RENDERING_PID ]]; then
         kill "$RENDERING_PID"
     fi
-    rm "/dev/shm/$SHMID"
-    rm "/tmp/$SHMID"
+    rm "$SHM"
+    rm "$CPIPE"
 
     printf "${ESC}[?1049l"
     printf "${ESC}[?25h"
@@ -171,11 +172,11 @@ active_carrier() {
 
 # shared memory
 write_shared() {
-    echo "$MODE|$ACTIVE_BUTTON|$ACTIVE_CARRIER|$COLS|$LINES" > "/dev/shm/$SHMID"
+    echo "$MODE|$ACTIVE_BUTTON|$ACTIVE_CARRIER|$COLS|$LINES" > "$SHM"
 }
 
 get_shared() {
-    local res=$(cat "/dev/shm/$SHMID" 2>/dev/null)
+    local res=$(cat "$SHM" 2>/dev/null)
     if [[ $? -eq 0 ]]; then
         echo "$res"
     fi
