@@ -408,7 +408,7 @@ main() {
                 ;;
 
             # ignore everything else
-            *) echo "INPUT: $input";;
+            *) echo "INPUT: $input" >> /dev/stderr;;
         esac
 
     done
