@@ -408,7 +408,7 @@ main() {
                 ;;
 
             # ignore everything else
-            *) continue;;
+            *) echo "INPUT: $input";;
         esac
 
     done
