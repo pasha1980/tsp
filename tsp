@@ -166,6 +166,7 @@ active_button() {
 active_carrier() {
     local length=${#CARRIERS[@]}
     local active_carr=$(get_shared | cut -d '|' -f 3)
+    active_carr=${active_carr#-}
     local index=$((active_carr % length))
     echo "${CARRIERS[$index]}"
 }
