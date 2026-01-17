@@ -359,7 +359,7 @@ main() {
 
         case "$input" in
             # key up
-            '[A' | k | w)
+            'A' | '[A' | k | w)
                 if [[ "$(active_mode)" == 'menu' ]]; then
                     ((ACTIVE_BUTTON++))
                     write_shared
@@ -369,7 +369,7 @@ main() {
                 ;;
 
             # key down
-            '[B' | j | s)
+            'B' | '[B' | j | s)
                 if [[ "$(active_mode)" == 'menu' ]]; then
                     ((ACTIVE_BUTTON--))
                     write_shared
@@ -379,7 +379,7 @@ main() {
                 ;;
 
             # key left
-            '[D' | h | a)
+            'D' | '[D' | h | a)
                 if [[ "$(active_button)" == 'select' && "$(active_mode)" == 'menu' ]]; then
                     ((ACTIVE_CARRIER++))
                     write_shared
@@ -389,7 +389,7 @@ main() {
                 ;;
 
             # key right
-            '[C' | l | d)
+            'C' | '[C' | l | d)
                 if [[ "$(active_button)" == 'select' && "$(active_mode)" == 'menu' ]]; then
                     ((ACTIVE_CARRIER--))
                     write_shared
@@ -408,7 +408,7 @@ main() {
                 ;;
 
             # ignore everything else
-            *) echo "INPUT: $input" >> /dev/stderr;;
+            *) continue;;
         esac
 
     done
