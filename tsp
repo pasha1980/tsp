@@ -231,14 +231,15 @@ render_buttons() {
 render_carriers() {
    local start_line=$1
    local start_indent=$2
+   local i=0
 
-   readarray -t strs <<<"$(active_carrier)"
-   for i in "${!strs[@]}"; do
+   while IFS= read -r line; do
        tput cup "$((start_line + i))" "$start_indent"
        printf "$(repeat 17 ' ')"
        tput cup "$((start_line + i))" "$start_indent"
-       printf "${strs[$i]}"
-   done
+       printf "$line"
+       ((i++))
+   done <<< "$(active_carrier)"
 }
 
 render_menu() {
