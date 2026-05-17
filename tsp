@@ -12,89 +12,6 @@ if ! tput cup 0 0 2>/dev/null; then
     exit 1
 fi
 
-# terminal constants
-COLS=$(tput cols)
-LINES=$(tput lines)
-ESC=$'\x1b'
-SHMID=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | head -c 64; echo)
-SHM=$(if [[ "$(uname -s)" == 'Darwin' ]]; then echo "/tmp/$SHMID"; else echo "/dev/shm/$SHMID"; fi)
-CPIPE="/tmp/$SHMID.sock"
-if [[ ! -p $CPIPE ]]; then
-    mkfifo $CPIPE
-fi
-
-# frames
-LOGO="
-<l>  _____ _______   __  ___                     ___
-<l> |_   _|_   _\ \ / / / __|_ __  __ _ __ ___  | _ \_ _ ___  __ _ _ _ __ _ _ __
-<l>   | |   | |  \ V /  \__ \ \'_ \/ _\` / _/ -_) |  _/ \'_/ _ \/ _\` | \'_/ _\` | \'  \\
-<l>   |_|   |_|   |_|   |___/ .__/\__,_\__\___| |_| |_| \___/\__, |_| \__,_|_|_|_|
-<l>                         |_|                              |___/
-"
-
-SUFRACE_BLOCK="
-<b1>
-<b2>
-"
-
-CARRIERS=('
-   ▐▌
-  ████
- ▐████▌
- ██████
- ██████
- ██████
- ██████
- ██████
-▐██████▌
-████████
- /\  /\\
-'
-
-'
-
-
-
-
-   /\
-  |  |
- /    \
-| O  O |
-|      |
-========
-/\/\/\/\
-'
-
-'
-
-
-   |
- |||||
-  |||
-  |||
- || ||
- |   |
-/     \
-========
-/\/\/\/\
-'
-)
-
-
-START_BUTTON='< Start Game >'
-SELECT_BUTTON='< Select Carrier >'
-
-# control variables (shared)
-RENDERING_PID=
-
-MODE=0
-ACTIVE_BUTTON=0
-ACTIVE_CARRIER=0
-
-UPDATE_MENU=1
-UPDATE_BUTTONS=1
-UPDATE_CARRIER=1
-
 # gameplay calculation variables
 ## total mass of the carrier
 G_M1=
@@ -118,34 +35,6 @@ G_alpha=
 G_V=0
 ## current rocket high
 G_h=0
-
-# helpers
-repeat() {
-    local times=$1
-    local text=$2
-    for _ in $(seq "$times"); do echo -n "$text"; done
-}
-
-fatal() {
-    printf "[error]" "$@" >&2
-    exit 1
-}
-
-cleanup() {
-    if [[ -n $RENDERING_PID ]]; then
-        kill "$RENDERING_PID"
-    fi
-    rm "$SHM"
-    rm "$CPIPE"
-
-    printf "${ESC}[?1049l"
-    printf "${ESC}[?25h"
-}
-
-calc_d() {
-    local expr=${1:-0}
-    awk "BEGIN {printf \"%d\n\", $expr }"
-}
 
 active_mode() {
     local mode=$(get_shared | cut -d '|' -f 1)
@@ -257,7 +146,6 @@ render_menu() {
     local cols=$(echo "$shared" | cut -d '|' -f 4)
     local lines=$(echo "$shared" | cut -d '|' -f 5)
 
-
     if [[ -n $u_menu ]]; then
         clear
         local logo_line=$((lines / 6))
@@ -268,7 +156,7 @@ render_menu() {
         printf "$l"
 
         tput cup $(calc_d "$lines / 1.1") 0
-        local f=$SUFRACE_BLOCK
+        local f=$SURFACE_BLOCK
         f=${f//<b1>/$(repeat $cols '_')}
         f=${f//<b2>/$(repeat $cols '/')}
 
@@ -301,7 +189,7 @@ render_gameplay() {
     local surface_height=$(calc_d "$lines - ($lines / 1.1)")
     if (( (G_h + (lines / 3)) < surface_height )); then
         tput cup "$(($lines - $surface_height))" 0
-        local f=$SUFRACE_BLOCK
+        local f=$SURFACE_BLOCK
         f=${f//<b1>/$(repeat $cols '_')}
         f=${f//<b2>/$(repeat $cols '/')}
         printf "$f"
@@ -413,5 +301,158 @@ main() {
 
     done
 }
+
+# helpers
+repeat() {
+    local times=$1
+    local text=$2
+    for _ in $(seq "$times"); do echo -n "$text"; done
+}
+
+fatal() {
+    printf "[error]" "$@" >&2
+    exit 1
+}
+
+cleanup() {
+    if [[ -n $RENDERING_PID ]]; then
+        kill "$RENDERING_PID"
+    fi
+    rm "$SHM"
+    rm "$CPIPE"
+
+    printf "${ESC}[?1049l"
+    printf "${ESC}[?25h"
+}
+
+calc_d() {
+    local expr=${1:-0}
+    awk "BEGIN {printf \"%d\n\", $expr }"
+}
+
+tput() {
+	local opt OPTIND OPTARG
+	while getopts 'ST:V' opt; do
+		case "$opt" in
+			S) command tput "$@"; return $?;;
+			T) true;;
+			V) echo "$VERSION"; return 0;;
+		esac
+	done
+	shift "$((OPTIND - 1))"
+
+	local ESC=$'\x1b'
+	case "$1" in
+		bel) echo -n $'\x7';;
+		sgr0 | me) echo -n "$ESC[0m";;
+		bold) echo -n "$ESC[1m";;
+		dim) echo -n "$ESC[2m";;
+		rev) echo -n "$ESC[7m";;
+		blink) echo -n "$ESC[5m";;
+		setaf | AF) echo -n "$ESC[38;5;$2m";;
+		setab | AB) echo -n "$ESC[48;5;$2m";;
+		sc) echo -n "${ESC}7";;
+		rc) echo -n "${ESC}8";;
+		cnorm) echo -n "$ESC[?25h";;
+		civis) echo -n "$ESC[?25l";;
+		smcup) echo -n "$ESC[?1049h";;
+		rmcup) echo -n "$ESC[?1049l";;
+		clear) echo -n "$ESC[H$ESC[2J";;
+		home) echo -n "$ESC[H";;
+		cuu) echo -n "$ESC[$2A";;
+		cud) echo -n "$ESC[$2B";;
+		cuf) echo -n "$ESC[$2C";;
+		cub) echo -n "$ESC[$2D";;
+		cup)
+			local row=$(($2 + 1))
+			local col=$(($3 + 1))
+			echo -n "$ESC[$row;${col}H";;
+		*) command tput "$@"; return $?;;
+	esac
+}
+
+# terminal constants
+COLS=$(tput cols)
+LINES=$(tput lines)
+ESC=$'\x1b'
+SHMID=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | head -c 64; echo)
+SHM=$([[ "$(uname -s)" == 'Darwin' ]] && echo "/tmp/$SHMID" || echo "/dev/shm/$SHMID")
+CPIPE="/tmp/$SHMID.fifo"
+if [[ ! -p $CPIPE ]]; then
+    mkfifo "$CPIPE"
+fi
+
+# frames
+LOGO="
+<l>  _____ _______   __  ___                     ___
+<l> |_   _|_   _\ \ / / / __|_ __  __ _ __ ___  | _ \_ _ ___  __ _ _ _ __ _ _ __
+<l>   | |   | |  \ V /  \__ \ \'_ \/ _\` / _/ -_) |  _/ \'_/ _ \/ _\` | \'_/ _\` | \'  \\
+<l>   |_|   |_|   |_|   |___/ .__/\__,_\__\___| |_| |_| \___/\__, |_| \__,_|_|_|_|
+<l>                         |_|                              |___/
+"
+
+SURFACE_BLOCK="
+<b1>
+<b2>
+"
+
+CARRIERS=('
+   ▐▌
+  ████
+ ▐████▌
+ ██████
+ ██████
+ ██████
+ ██████
+ ██████
+▐██████▌
+████████
+ /\  /\\
+'
+
+'
+
+
+
+
+   /\
+  |  |
+ /    \
+| O  O |
+|      |
+========
+/\/\/\/\
+'
+
+'
+
+
+   |
+ |||||
+  |||
+  |||
+ || ||
+ |   |
+/     \
+========
+/\/\/\/\
+'
+)
+
+
+START_BUTTON='< Start Game >'
+SELECT_BUTTON='< Select Carrier >'
+
+# control variables (shared)
+RENDERING_PID=
+
+MODE=0
+ACTIVE_BUTTON=0
+ACTIVE_CARRIER=0
+
+UPDATE_MENU=1
+UPDATE_BUTTONS=1
+UPDATE_CARRIER=1
+
 
 main "$@"
