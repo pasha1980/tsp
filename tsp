@@ -129,34 +129,33 @@ render_menu() {
         return 0
     fi
 
-    local theCols=$(echo "$shared" | split '|' 3)
-    local theLines=$(echo "$shared" | split '|' 4)
+    local cols=$(echo "$shared" | split '|' 3)
+    local lines=$(echo "$shared" | split '|' 4)
 
     if (( $u_menu )); then
-        echo u_menu >> debug5
         clear
-        local logo_line=$((theLines / 6))
-        local logo_indent=$(calc_d "$theCols / 3.77")
+        local logo_line=$((lines / 6))
+        local logo_indent=$(calc_d "$cols / 3.77")
         tput cup "$logo_line" 0
         local l=$LOGO
         l=${l//<l>/$(repeat $logo_indent ' ')}
         printf "$l"
 
-        tput cup $(calc_d "$theLines / 1.1") 0
+        tput cup $(calc_d "$lines / 1.1") 0
         local f=$SURFACE_BLOCK
-        f=${f//<b1>/$(repeat $theCols '_')}
-        f=${f//<b2>/$(repeat $theCols '/')}
+        f=${f//<b1>/$(repeat $cols '_')}
+        f=${f//<b2>/$(repeat $cols '/')}
 
         printf "$f"
     fi
 
     if (( $u_buttons )); then
-        render_buttons $(calc_d "$theLines / 2.6") $(calc_d "$theCols / 2.35")
+        render_buttons $(calc_d "$lines / 2.6") $(calc_d "$cols / 2.35")
     fi
 
     if (( $u_carriers )); then
-        local carrier_indent=$(calc_d "$theCols / 2.2")
-        local carrier_line=$(calc_d "$theLines / 1.5")
+        local carrier_indent=$(calc_d "$cols / 2.2")
+        local carrier_line=$(calc_d "$lines / 1.5")
         render_carriers "$carrier_line" "$carrier_indent"
     fi
 
@@ -219,16 +218,16 @@ main() {
         UPDATE_BUTTONS=
         UPDATE_CARRIER=
 
-        local theCols=$(cols)
-        if (( theCols != COLS )); then
+        local cols=$(tput cols)
+        if (( cols != COLS )); then
             UPDATE_MENU=1
-            COLS=$theCols
+            COLS=$cols
         fi
 
-        local theLines=$(lines)
-        if (( theLines != LINES )); then
+        local lines=$(tput lines)
+        if (( lines != LINES )); then
             UPDATE_MENU=1
-            LINES=$theLines
+            LINES=$lines
         fi
 
         local input=
@@ -322,6 +321,13 @@ calc_d() {
     awk "BEGIN {printf \"%d\n\", $expr }"
 }
 
+# reference: https://github.com/dylanaraps/pure-bash-bible?tab=readme-ov-file#split-a-string-on-a-delimiter
+split() {
+  data=$(</dev/stdin)
+  IFS=$'\n' read -d "" -ra arr <<< "${data//$1/$'\n'}"
+  printf '%s\n' "${arr[$2]}"
+}
+
 # reference: https://github.com/bahamas10/bash-tput
 tput() {
 	local opt OPTIND OPTARG
@@ -360,28 +366,15 @@ tput() {
 			local row=$(($2 + 1))
 			local col=$(($3 + 1))
 			echo -n "$ESC[$row;${col}H";;
+    lines) stty size | split ' ' 0;;
+    cols) stty size | split ' ' 1;;
 		*) command tput "$@"; return $?;;
 	esac
 }
 
-# reference: https://github.com/dylanaraps/pure-bash-bible?tab=readme-ov-file#split-a-string-on-a-delimiter
-split() {
-  data=$(</dev/stdin)
-  IFS=$'\n' read -d "" -ra arr <<< "${data//$1/$'\n'}"
-  printf '%s\n' "${arr[$2]}"
-}
-
-lines() {
-  stty size | split ' ' 0
-}
-
-cols() {
-  stty size | split ' ' 1
-}
-
 # terminal constants
-COLS=$(cols)
-LINS=$(lines)
+COLS=$(tput cols)
+LINS=$(tput lines)
 ESC=$'\x1b'
 SHMID=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | head -c 64; echo)
 SHM=$([[ "$(uname -s)" == 'Darwin' ]] && echo "/tmp/$SHMID" || echo "/dev/shm/$SHMID")
